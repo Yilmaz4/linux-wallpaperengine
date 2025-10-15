@@ -14,8 +14,8 @@ std::vector<std::string> appDirectoryPaths = {
 };
 
 std::vector<std::string> workshopDirectoryPaths = {
-    ".local/share/Steam/steamapps/workshop/content",
     ".steam/steam/steamapps/workshop/content",
+    ".local/share/Steam/steamapps/workshop/content",
     ".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/workshop/content",
     "snap/steam/common/.local/share/Steam/steamapps/workshop/content",
 };
