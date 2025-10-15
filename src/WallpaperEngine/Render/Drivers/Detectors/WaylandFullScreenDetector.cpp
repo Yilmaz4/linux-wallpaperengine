@@ -188,8 +188,6 @@ bool WaylandFullScreenDetector::anythingFullscreen () const {
     std::string line;
     int currentWorkspace = -999;
     int floating = 0;
-    int pseudo = 0;
-    bool foundClient = false;
 
     while (std::getline(iss, line)) {
         if (line.find("workspace:") != std::string::npos) {
@@ -202,23 +200,14 @@ bool WaylandFullScreenDetector::anythingFullscreen () const {
             std::size_t npos = line.find_first_of("0123456789");
             if (npos != std::string::npos)
                 floating = line[npos] - '0';
-        }
-
-        if (line.find("pseudo:") != std::string::npos) {
-            std::size_t npos = line.find_first_of("0123456789");
-            if (npos != std::string::npos)
-                pseudo = line[npos] - '0';
-            // Once we have both floating and pseudo, check conditions
             if (currentWorkspace == workspaceID) {
-                foundClient = true;
-                if (floating == 1 || pseudo == 1)
-                    return false;
+                if (floating == 0)  // at least one non-floating window
+                    return true;
             }
         }
     }
 
-    // Return true only if clients were found and all had floating:0
-    return foundClient;
+    return false;
 }
 
 void WaylandFullScreenDetector::reset () {}
