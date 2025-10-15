@@ -138,12 +138,87 @@ WaylandFullScreenDetector::~WaylandFullScreenDetector () {
         wl_display_disconnect (m_display);
 }
 
+std::string runCommand(const std::string& cmd) {
+    std::array<char, 256> buffer;
+    std::string result;
+    auto pipeCloser = [](FILE* f) { if (f) pclose(f); };
+    std::unique_ptr<FILE, decltype(pipeCloser)> pipe(popen(cmd.c_str(), "r"), pipeCloser);
+    if (!pipe) return "";
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
+        result += buffer.data();
+    return result;
+}
+
 bool WaylandFullScreenDetector::anythingFullscreen () const {
-    if (!m_toplevelManager) {
+    // if (!m_toplevelManager) {
+    //     return false;
+    // }
+    // wl_display_roundtrip (m_display);
+    // return m_fullscreenCount > 0;
+
+    auto now = std::chrono::system_clock::now();
+    static auto launch = now;
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - launch).count() < 1000) {
         return false;
     }
-    wl_display_roundtrip (m_display);
-    return m_fullscreenCount > 0;
+
+    std::string active = runCommand("hyprctl activeworkspace");
+    if (active.empty()) return false;
+
+    // Find workspace ID
+    std::size_t wsPos = active.find("workspace ID");
+    if (wsPos == std::string::npos) return false;
+    std::size_t numPos = active.find_first_of("0123456789", wsPos);
+    if (numPos == std::string::npos) return false;
+    int workspaceID = std::stoi(active.substr(numPos));
+
+    // Check fullscreen flag
+    std::size_t fsPos = active.find("hasfullscreen:");
+    if (fsPos != std::string::npos) {
+        std::size_t num = active.find_first_of("0123456789", fsPos);
+        if (num != std::string::npos && active[num] == '1')
+            return true;
+    }
+
+    // No fullscreen, check floating clients
+    std::string clients = runCommand("hyprctl clients");
+    if (clients.empty()) return false;
+
+    std::istringstream iss(clients);
+    std::string line;
+    int currentWorkspace = -999;
+    int floating = 0;
+    int pseudo = 0;
+    bool foundClient = false;
+
+    while (std::getline(iss, line)) {
+        if (line.find("workspace:") != std::string::npos) {
+            std::size_t npos = line.find_first_of("-0123456789");
+            if (npos != std::string::npos)
+                currentWorkspace = std::stoi(line.substr(npos));
+        }
+
+        if (line.find("floating:") != std::string::npos) {
+            std::size_t npos = line.find_first_of("0123456789");
+            if (npos != std::string::npos)
+                floating = line[npos] - '0';
+        }
+
+        if (line.find("pseudo:") != std::string::npos) {
+            std::size_t npos = line.find_first_of("0123456789");
+            if (npos != std::string::npos)
+                pseudo = line[npos] - '0';
+            // Once we have both floating and pseudo, check conditions
+            if (currentWorkspace == workspaceID) {
+                foundClient = true;
+                if (floating == 1 || pseudo == 1)
+                    return false;
+            }
+        }
+    }
+
+    // Return true only if clients were found and all had floating:0
+    return foundClient;
 }
 
 void WaylandFullScreenDetector::reset () {}
